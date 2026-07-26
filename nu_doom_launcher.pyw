@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DOOM Mod Launcher — a single-window GUI for launching DOOM source ports with an
+"""Nu-Doom Launcher — a single-window GUI for launching DOOM source ports with an
 IWAD and any number of PWAD/.pk3 mods.
 
 Pick a source port (add/remove exes from a small library), point it at an IWAD
@@ -17,8 +17,8 @@ import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-APP_TITLE = "DOOM Mod Launcher"
-CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".doom_mod_launcher.json")
+APP_TITLE = "Nu-Doom Launcher"
+CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".nu_doom_launcher.json")
 
 # File extensions we treat as IWADs / mods (matched case-insensitively).
 IWAD_EXTS = (".wad", ".iwad")
@@ -36,6 +36,7 @@ class LauncherConfig:
         "iwad_folder": "",
         "mods_folder": "",
         "extra_args": "",
+        "mod_load_method": "-file",   # "-file" or "-merge" for WAD/PK3 mods
     }
 
     def __init__(self, path=CONFIG_PATH):
@@ -198,6 +199,24 @@ class LauncherApp(ttk.Frame):
             side="right"
         )
 
+        # Load method for WAD/PK3 mods: -file (append) or -merge (merge lumps).
+        # .deh / .bex patches always load via -deh regardless of this choice.
+        method_bar = ttk.Frame(mods_panel)
+        method_bar.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        ttk.Label(method_bar, text="Load WAD/PK3 with:").pack(side="left")
+        self.mod_method_var = tk.StringVar(value="-file")
+        ttk.Radiobutton(
+            method_bar, text="-file", value="-file", variable=self.mod_method_var,
+            command=self._on_method_change,
+        ).pack(side="left", padx=(6, 0))
+        ttk.Radiobutton(
+            method_bar, text="-merge", value="-merge", variable=self.mod_method_var,
+            command=self._on_method_change,
+        ).pack(side="left", padx=(6, 0))
+        ttk.Label(
+            method_bar, text="(.deh / .bex always use -deh)", foreground="gray"
+        ).pack(side="left", padx=(10, 0))
+
         # --- Extra args + command preview + Launch ---------------------------
         bottom = ttk.Frame(self)
         bottom.grid(row=3, column=0, sticky="ew", pady=(8, 0))
@@ -225,8 +244,15 @@ class LauncherApp(ttk.Frame):
         self.iwad_folder_var.set(self.cfg["iwad_folder"])
         self.mods_folder_var.set(self.cfg["mods_folder"])
         self.extra_var.set(self.cfg["extra_args"])
+        method = self.cfg["mod_load_method"]
+        self.mod_method_var.set(method if method in ("-file", "-merge") else "-file")
         self.refresh_iwad_list()
         self.refresh_mods_list()
+
+    def _on_method_change(self):
+        self.cfg["mod_load_method"] = self.mod_method_var.get()
+        self.cfg.save()
+        self.update_command_preview()
 
     def _refresh_port_combo(self):
         ports = self.cfg["source_ports"]
@@ -372,10 +398,13 @@ class LauncherApp(ttk.Frame):
             args += ["-iwad", iwad]
 
         mods = self.selected_mod_paths()
-        files = [m for m in mods if not m.lower().endswith(DEH_EXTS)]
+        # DeHackEd patches always load via -deh; other WAD/PK3 mods load via the
+        # method the user picked (-file appends, -merge merges lumps into the IWAD).
+        wads = [m for m in mods if not m.lower().endswith(DEH_EXTS)]
         dehs = [m for m in mods if m.lower().endswith(DEH_EXTS)]
-        if files:
-            args += ["-file"] + files
+        if wads:
+            method = self.mod_method_var.get() or "-file"
+            args += [method] + wads
         if dehs:
             args += ["-deh"] + dehs
 

@@ -1,13 +1,15 @@
-# DOOM Mod Launcher
+# Nu-Doom Launcher
 
 A single-window GUI (Python + tkinter, no dependencies) for launching DOOM
-source ports with an IWAD and any number of PWAD / `.pk3` mods.
+source ports with an IWAD and any number of PWAD / `.pk3` mods. Built for
+[Nu-Doom](https://github.com/Captain-Beefheart/Nu-Doom), but works with any
+classic-style port (Crispy, Chocolate, Woof) as well as GZDoom.
 
 ## Running
 
-- **Double-click `DoomModLauncher.vbs`** — starts the app with `pythonw`, no console window.
+- **Double-click `Nu-Doom-Launcher.vbs`** — starts the app with `pythonw`, no console window.
 - Or run `start.bat` to launch with a console attached (shows tracebacks — handy for debugging).
-- Or from a shell: `python doom_launcher.pyw`
+- Or from a shell: `python nu_doom_launcher.pyw`
 
 Requires Python 3 with tkinter (the MSYS2 `mingw-w64` Python has it built in).
 The `.vbs` and `.bat` point at `C:\msys64\mingw64\bin\` and fall back to whatever
@@ -15,7 +17,7 @@ The `.vbs` and `.bat` point at `C:\msys64\mingw64\bin\` and fall back to whateve
 
 ## Using it
 
-1. **Add Source Port** — browse to a source-port `.exe` (GZDoom, Crispy, Nu-Doom,
+1. **Add Source Port** — browse to a source-port `.exe` (Nu-Doom, GZDoom, Crispy,
    Woof, Chocolate Doom, …). Add as many as you like; pick the active one from the
    **Source** dropdown. **Delete Source Port** removes the selected one from the
    list (it never deletes the file itself).
@@ -27,6 +29,11 @@ The `.vbs` and `.bat` point at `C:\msys64\mingw64\bin\` and fall back to whateve
    `.bex`, `.zip` files. Select any number.
    - **Load order matters** in Doom — use **▲ Move Up / ▼ Move Down** to arrange the
      selected mods. They load in top-to-bottom list order.
+   - **Load WAD/PK3 with:** choose `-file` (append the PWADs after the IWAD) or
+     `-merge` (merge the PWAD lumps into the IWAD's namespaces, so new sprites,
+     flats and textures resolve correctly — matches Nu-Doom / Crispy / Chocolate
+     WAD-merge support). `.deh` / `.bex` DeHackEd patches always load via `-deh`
+     regardless of this choice.
 4. **Extra parameters** (optional) — anything else to pass to the port, e.g.
    `-skill 4 -warp 1 1 -complevel 9`.
 5. The **Command** box shows the exact command line that will run. **Launch** runs it.
@@ -34,13 +41,14 @@ The `.vbs` and `.bat` point at `C:\msys64\mingw64\bin\` and fall back to whateve
 ### How the command is built
 
 ```
-<port.exe> -iwad <iwad> -file <mod1> <mod2> … -deh <patch.deh> … <extra args>
+<port.exe> -iwad <iwad> {-file|-merge} <mod1> <mod2> … -deh <patch.deh> … <extra args>
 ```
 
-`.deh` / `.bex` files are passed with `-deh`; everything else selected goes under
-`-file`. The IWAD folder and mods folder can be the same folder if you prefer.
+`.deh` / `.bex` files are passed with `-deh`; every other selected mod is passed
+with whichever of `-file` / `-merge` you chose. The IWAD folder and mods folder
+can be the same folder if you prefer.
 
 ## Where settings are stored
 
-`~/.doom_mod_launcher.json` (i.e. `%USERPROFILE%\.doom_mod_launcher.json`) —
-remembers your source ports, folders, and extra parameters between runs.
+`~/.nu_doom_launcher.json` (i.e. `%USERPROFILE%\.nu_doom_launcher.json`) —
+remembers your source ports, folders, load method, and extra parameters between runs.
