@@ -95,3 +95,7 @@ python -m nuitka \
   --output-filename=Nu-Doom-Launcher.exe \
   nu_doom_launcher.pyw
 ```
+
+## License
+
+Released under the [MIT License](LICENSE).
