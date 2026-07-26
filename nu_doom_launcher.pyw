@@ -31,13 +31,19 @@ class LauncherConfig:
     """Load/save persisted settings as a small JSON file in the user's home dir."""
 
     DEFAULTS = {
-        "source_ports": [],     # list of full paths to source-port exes
-        "selected_port": "",    # currently selected port path
+        "source_ports": [],       # list of full paths to source-port exes
+        "selected_port": "",      # currently selected port path
+        # Per-port flag used to load WAD/PK3 files, keyed by port path. Default is
+        # "-file"; set "-merge" for Chocolate/Crispy Doom. Mirrors Doom Launcher's
+        # per-source-port "FileOption" (DeHackEd always loads via -deh separately).
+        "port_file_options": {},
         "iwad_folder": "",
         "mods_folder": "",
         "extra_args": "",
-        "mod_load_method": "-file",   # "-file" or "-merge" for WAD/PK3 mods
     }
+
+    # File option to assume for a port that doesn't have one stored yet.
+    DEFAULT_FILE_OPTION = "-file"
 
     def __init__(self, path=CONFIG_PATH):
         self.path = path
@@ -125,6 +131,24 @@ class LauncherApp(ttk.Frame):
             row=0, column=3, padx=(6, 0)
         )
 
+        # Per-port file option (how WAD/PK3 files load): -file, or -merge for
+        # Chocolate/Crispy Doom. Stored against the selected source port.
+        ttk.Label(port_frame, text="File option:").grid(
+            row=1, column=0, padx=(0, 6), pady=(6, 0), sticky="e"
+        )
+        self.file_option_var = tk.StringVar(value=LauncherConfig.DEFAULT_FILE_OPTION)
+        self.file_option_combo = ttk.Combobox(
+            port_frame, textvariable=self.file_option_var,
+            values=["-file", "-merge"], width=12,
+        )
+        self.file_option_combo.grid(row=1, column=1, sticky="w", pady=(6, 0))
+        self.file_option_combo.bind("<<ComboboxSelected>>", self._on_file_option_change)
+        self.file_option_combo.bind("<KeyRelease>", self._on_file_option_change)
+        ttk.Label(
+            port_frame, text="(-merge for Chocolate / Crispy Doom; .deh & .bex always use -deh)",
+            foreground="gray",
+        ).grid(row=1, column=2, columnspan=2, sticky="w", padx=(6, 0), pady=(6, 0))
+
         # --- Folders row -----------------------------------------------------
         folder_frame = ttk.Frame(self)
         folder_frame.grid(row=1, column=0, sticky="ew", pady=(0, 8))
@@ -199,24 +223,6 @@ class LauncherApp(ttk.Frame):
             side="right"
         )
 
-        # Load method for WAD/PK3 mods: -file (append) or -merge (merge lumps).
-        # .deh / .bex patches always load via -deh regardless of this choice.
-        method_bar = ttk.Frame(mods_panel)
-        method_bar.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
-        ttk.Label(method_bar, text="Load WAD/PK3 with:").pack(side="left")
-        self.mod_method_var = tk.StringVar(value="-file")
-        ttk.Radiobutton(
-            method_bar, text="-file", value="-file", variable=self.mod_method_var,
-            command=self._on_method_change,
-        ).pack(side="left", padx=(6, 0))
-        ttk.Radiobutton(
-            method_bar, text="-merge", value="-merge", variable=self.mod_method_var,
-            command=self._on_method_change,
-        ).pack(side="left", padx=(6, 0))
-        ttk.Label(
-            method_bar, text="(.deh / .bex always use -deh)", foreground="gray"
-        ).pack(side="left", padx=(10, 0))
-
         # --- Extra args + command preview + Launch ---------------------------
         bottom = ttk.Frame(self)
         bottom.grid(row=3, column=0, sticky="ew", pady=(8, 0))
@@ -241,18 +247,12 @@ class LauncherApp(ttk.Frame):
     # ------------------------------------------------------ state <-> widgets
     def _load_state_into_widgets(self):
         self._refresh_port_combo()
+        self._load_file_option_for_selected_port()
         self.iwad_folder_var.set(self.cfg["iwad_folder"])
         self.mods_folder_var.set(self.cfg["mods_folder"])
         self.extra_var.set(self.cfg["extra_args"])
-        method = self.cfg["mod_load_method"]
-        self.mod_method_var.set(method if method in ("-file", "-merge") else "-file")
         self.refresh_iwad_list()
         self.refresh_mods_list()
-
-    def _on_method_change(self):
-        self.cfg["mod_load_method"] = self.mod_method_var.get()
-        self.cfg.save()
-        self.update_command_preview()
 
     def _refresh_port_combo(self):
         ports = self.cfg["source_ports"]
@@ -266,6 +266,25 @@ class LauncherApp(ttk.Frame):
         else:
             self.port_var.set("")
 
+    # ----------------------------------------------------------- file option
+    def file_option_for(self, port):
+        """The load flag stored for *port* (default -file), like Doom Launcher."""
+        return self.cfg["port_file_options"].get(port) or LauncherConfig.DEFAULT_FILE_OPTION
+
+    def _load_file_option_for_selected_port(self):
+        port = self.port_var.get()
+        self.file_option_var.set(
+            self.file_option_for(port) if port else LauncherConfig.DEFAULT_FILE_OPTION
+        )
+
+    def _on_file_option_change(self, _event=None):
+        port = self.port_var.get()
+        if not port:
+            return
+        self.cfg["port_file_options"][port] = self.file_option_var.get().strip()
+        self.cfg.save()
+        self.update_command_preview()
+
     # --------------------------------------------------------- source ports
     def add_source_port(self):
         path = filedialog.askopenfilename(
@@ -278,9 +297,11 @@ class LauncherApp(ttk.Frame):
         ports = self.cfg["source_ports"]
         if path not in ports:
             ports.append(path)
+        self.cfg["port_file_options"].setdefault(path, LauncherConfig.DEFAULT_FILE_OPTION)
         self.cfg["selected_port"] = path
         self.cfg.save()
         self._refresh_port_combo()
+        self._load_file_option_for_selected_port()
         self.update_command_preview()
 
     def delete_source_port(self):
@@ -296,14 +317,17 @@ class LauncherApp(ttk.Frame):
         ports = self.cfg["source_ports"]
         if current in ports:
             ports.remove(current)
+        self.cfg["port_file_options"].pop(current, None)
         self.cfg["selected_port"] = ports[0] if ports else ""
         self.cfg.save()
         self._refresh_port_combo()
+        self._load_file_option_for_selected_port()
         self.update_command_preview()
 
     def _on_port_selected(self, _event=None):
         self.cfg["selected_port"] = self.port_var.get()
         self.cfg.save()
+        self._load_file_option_for_selected_port()
         self.update_command_preview()
 
     # -------------------------------------------------------------- folders
@@ -398,13 +422,14 @@ class LauncherApp(ttk.Frame):
             args += ["-iwad", iwad]
 
         mods = self.selected_mod_paths()
-        # DeHackEd patches always load via -deh; other WAD/PK3 mods load via the
-        # method the user picked (-file appends, -merge merges lumps into the IWAD).
+        # Follow Doom Launcher: DeHackEd patches (.deh/.bex) always load via -deh;
+        # everything else loads via the selected port's file option (-file, or
+        # -merge for Chocolate/Crispy). An empty file option appends bare files.
         wads = [m for m in mods if not m.lower().endswith(DEH_EXTS)]
         dehs = [m for m in mods if m.lower().endswith(DEH_EXTS)]
         if wads:
-            method = self.mod_method_var.get() or "-file"
-            args += [method] + wads
+            file_option = self.file_option_for(port).strip()
+            args += ([file_option] if file_option else []) + wads
         if dehs:
             args += ["-deh"] + dehs
 
