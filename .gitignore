@@ -1,0 +1,6 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Launcher settings live in the user's home dir, but ignore a local copy just in case
+.doom_mod_launcher.json
